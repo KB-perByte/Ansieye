@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.Python
+venv/
+env/
+ENV/
+.env
+*.pem
+*.key
+.DS_Store
+*.log
+

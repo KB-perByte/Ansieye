@@ -1,0 +1,65 @@
+{
+  "family": "github-pr-bot",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "github-pr-bot",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/github-pr-bot:latest",
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "GEMINI_API_KEY",
+          "value": "REPLACE_WITH_YOUR_KEY"
+        },
+        {
+          "name": "GITHUB_APP_ID",
+          "value": "REPLACE_WITH_YOUR_APP_ID"
+        },
+        {
+          "name": "GITHUB_PRIVATE_KEY_B64",
+          "value": "REPLACE_WITH_YOUR_ENCODED_KEY"
+        },
+        {
+          "name": "GITHUB_WEBHOOK_SECRET",
+          "value": "REPLACE_WITH_YOUR_SECRET"
+        },
+        {
+          "name": "PORT",
+          "value": "3000"
+        },
+        {
+          "name": "HOST",
+          "value": "0.0.0.0"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/github-pr-bot",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:3000/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
+
