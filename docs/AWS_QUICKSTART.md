@@ -167,10 +167,10 @@ curl https://your-domain.com/health
 
 ```bash
 # View application logs
-pm2 logs github-pr-bot
+pm2 logs ansieyes
 
 # Restart application
-pm2 restart github-pr-bot
+pm2 restart ansieyes
 
 # Check status
 pm2 status
@@ -187,7 +187,7 @@ df -h
 
 ### Application not starting
 ```bash
-pm2 logs github-pr-bot --lines 50
+pm2 logs ansieyes --lines 50
 # Check for errors in logs
 ```
 

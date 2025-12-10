@@ -1,13 +1,13 @@
 {
-  "family": "github-pr-bot",
+  "family": "ansieyes",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
   "containerDefinitions": [
     {
-      "name": "github-pr-bot",
-      "image": "YOUR_ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/github-pr-bot:latest",
+      "name": "ansieyes",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/ansieyes:latest",
       "portMappings": [
         {
           "containerPort": 3000,
@@ -44,7 +44,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/github-pr-bot",
+          "awslogs-group": "/ecs/ansieyes",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }

@@ -28,6 +28,7 @@ Complete guide to deploy your GitHub bot on AWS.
 1. **Go to EC2 Dashboard** → Launch Instance
 
 2. **Configure Instance**:
+
    - **Name**: github-pr-review-bot
    - **AMI**: Ubuntu 22.04 LTS (Free tier eligible)
    - **Instance Type**: t2.micro (Free tier) or t3.small ($0.0208/hour)
@@ -135,6 +136,7 @@ HOST=0.0.0.0
 ```
 
 **To encode your private key:**
+
 ```bash
 # On your local machine
 cat private-key.pem | base64 -w 0
@@ -150,6 +152,7 @@ Skip to Step 7 if using IP directly.
 #### Option B: Use Domain Name
 
 1. **Point domain to EC2 IP**:
+
    - Go to your domain registrar
    - Add A record: `@` → `YOUR_EC2_IP`
    - Add A record: `www` → `YOUR_EC2_IP`
@@ -168,7 +171,7 @@ Add this configuration:
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com www.your-domain.com;
+    # server_name your-domain.com www.your-domain.com;
 
     # If using IP only, remove server_name line above
 
@@ -220,27 +223,29 @@ Add:
 
 ```javascript
 module.exports = {
-  apps: [{
-    name: 'github-pr-bot',
-    script: 'app.py',
-    interpreter: 'python3',
-    cwd: '/home/ubuntu/your-repo',
-    env: {
-      GEMINI_API_KEY: 'your_key',
-      GITHUB_APP_ID: 'your_app_id',
-      GITHUB_PRIVATE_KEY_B64: 'your_encoded_key',
-      GITHUB_WEBHOOK_SECRET: 'your_secret',
-      PORT: 3000,
-      HOST: '0.0.0.0'
+  apps: [
+    {
+      name: 'ansieyes',
+      script: 'app.py',
+      interpreter: 'python3',
+      cwd: '/home/ubuntu/your-repo',
+      env: {
+        GEMINI_API_KEY: 'your_key',
+        GITHUB_APP_ID: 'your_app_id',
+        GITHUB_PRIVATE_KEY_B64: 'your_encoded_key',
+        GITHUB_WEBHOOK_SECRET: 'your_secret',
+        PORT: 3000,
+        HOST: '0.0.0.0',
+      },
+      error_file: '/home/ubuntu/logs/err.log',
+      out_file: '/home/ubuntu/logs/out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
     },
-    error_file: '/home/ubuntu/logs/err.log',
-    out_file: '/home/ubuntu/logs/out.log',
-    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-    merge_logs: true,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G'
-  }]
+  ],
 };
 ```
 
@@ -253,7 +258,7 @@ pm2 install pm2-logrotate
 # Start application
 cd /home/ubuntu/your-repo
 source venv/bin/activate
-pm2 start app.py --name github-pr-bot --interpreter python3 --env production
+pm2 start app.py --name ansieyes --interpreter python3 --env production
 
 # Save PM2 configuration
 pm2 save
@@ -320,7 +325,7 @@ curl http://localhost:3000/health
 curl https://your-domain.com/health
 
 # Check logs
-pm2 logs github-pr-bot
+pm2 logs ansieyes
 # OR
 sudo journalctl -u ansieyes -f
 ```
@@ -339,7 +344,7 @@ cd /home/ubuntu/your-repo
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
-pm2 restart github-pr-bot
+pm2 restart ansieyes
 ```
 
 Make executable:
@@ -361,19 +366,19 @@ chmod +x ~/deploy.sh
 
 ```bash
 # On your local machine
-aws ecr create-repository --repository-name github-pr-bot
+aws ecr create-repository --repository-name ansieyes
 
 # Get login token
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
 
 # Build image
-docker build -t github-pr-bot .
+docker build -t ansieyes .
 
 # Tag image
-docker tag github-pr-bot:latest YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/github-pr-bot:latest
+docker tag ansieyes:latest YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/ansieyes:latest
 
 # Push image
-docker push YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/github-pr-bot:latest
+docker push YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/ansieyes:latest
 ```
 
 ### Step 2: Create ECS Task Definition
@@ -382,15 +387,15 @@ Create `task-definition.json`:
 
 ```json
 {
-  "family": "github-pr-bot",
+  "family": "ansieyes",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
   "containerDefinitions": [
     {
-      "name": "github-pr-bot",
-      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/github-pr-bot:latest",
+      "name": "ansieyes",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/ansieyes:latest",
       "portMappings": [
         {
           "containerPort": 3000,
@@ -426,7 +431,7 @@ Create `task-definition.json`:
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/github-pr-bot",
+          "awslogs-group": "/ecs/ansieyes",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -447,8 +452,8 @@ aws ecs register-task-definition --cli-input-json file://task-definition.json
 ```bash
 aws ecs create-service \
   --cluster your-cluster-name \
-  --service-name github-pr-bot \
-  --task-definition github-pr-bot \
+  --service-name ansieyes \
+  --task-definition ansieyes \
   --desired-count 1 \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
@@ -474,13 +479,13 @@ pip install awsebcli
 ### Step 2: Initialize EB Application
 
 ```bash
-eb init -p python-3.11 github-pr-bot --region us-east-1
+eb init -p python-3.11 ansieyes --region us-east-1
 ```
 
 ### Step 3: Create Environment
 
 ```bash
-eb create github-pr-bot-env
+eb create ansieyes-env
 ```
 
 ### Step 4: Set Environment Variables
@@ -513,18 +518,21 @@ eb status
 ## Cost Estimation
 
 ### EC2 (t3.small)
+
 - **Instance**: ~$15/month (if running 24/7)
 - **Data Transfer**: First 100 GB free, then $0.09/GB
 - **Storage**: 20 GB EBS ~$2/month
 - **Total**: ~$17-20/month
 
 ### ECS Fargate
+
 - **CPU**: 0.25 vCPU × $0.04048/hour = ~$7.30/month
 - **Memory**: 0.5 GB × $0.004445/hour = ~$3.20/month
 - **ALB**: ~$16/month
 - **Total**: ~$26-30/month
 
 ### Elastic Beanstalk
+
 - Similar to EC2 costs
 - Additional management overhead
 
@@ -563,6 +571,7 @@ aws secretsmanager create-secret \
 ### 3. Restrict Security Groups
 
 Only allow necessary ports:
+
 - SSH: Only from your IP
 - HTTP/HTTPS: From anywhere (for webhooks)
 
@@ -593,6 +602,7 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
 ### CloudWatch Metrics
 
 Monitor:
+
 - CPU utilization
 - Memory usage
 - Network traffic
@@ -601,6 +611,7 @@ Monitor:
 ### CloudWatch Logs
 
 View logs:
+
 ```bash
 # Via AWS Console: CloudWatch → Log Groups
 # Or via CLI:
@@ -632,7 +643,7 @@ aws cloudwatch put-metric-alarm \
 ```bash
 # Check PM2 status
 pm2 status
-pm2 logs github-pr-bot
+pm2 logs ansieyes
 
 # Check systemd status
 sudo systemctl status ansieyes
@@ -658,7 +669,7 @@ free -h
 ps aux --sort=-%mem | head
 
 # Restart application
-pm2 restart github-pr-bot
+pm2 restart ansieyes
 ```
 
 ---
@@ -667,11 +678,11 @@ pm2 restart github-pr-bot
 
 ```bash
 # View logs
-pm2 logs github-pr-bot
+pm2 logs ansieyes
 sudo journalctl -u ansieyes -f
 
 # Restart application
-pm2 restart github-pr-bot
+pm2 restart ansieyes
 sudo systemctl restart ansieyes
 
 # Check status
@@ -683,7 +694,7 @@ cd /home/ubuntu/your-repo
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
-pm2 restart github-pr-bot
+pm2 restart ansieyes
 ```
 
 ---
@@ -697,4 +708,3 @@ pm2 restart github-pr-bot
 5. ✅ Review and optimize costs
 
 For more details, see the main [HOSTING.md](HOSTING.md) guide.
-

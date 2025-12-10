@@ -1,9 +1,9 @@
 module.exports = {
   apps: [{
-    name: 'github-pr-bot',
+    name: 'ansieyes',
     script: 'app.py',
     interpreter: 'python3',
-    cwd: '/home/ubuntu/github-pr-bot',
+    cwd: '/home/ubuntu/ansieyes',
     env_file: '.env',
     error_file: '/home/ubuntu/logs/err.log',
     out_file: '/home/ubuntu/logs/out.log',

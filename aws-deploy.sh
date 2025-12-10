@@ -20,7 +20,7 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # Variables
-APP_DIR="$HOME/github-pr-bot"
+APP_DIR="$HOME/ansieyes"
 REPO_URL="${1:-https://github.com/KB-perByte/Ansieye.git}"
 
 echo "📦 Installing system dependencies..."
@@ -100,9 +100,9 @@ echo "🚀 Starting application with PM2..."
 mkdir -p "$HOME/logs"
 
 # Update ecosystem.config.js with correct path
-sed -i "s|/home/ubuntu/github-pr-bot|$APP_DIR|g" ecosystem.config.js 2>/dev/null || true
+sed -i "s|/home/ubuntu/ansieyes|$APP_DIR|g" ecosystem.config.js 2>/dev/null || true
 
-pm2 start ecosystem.config.js || pm2 restart github-pr-bot
+pm2 start ecosystem.config.js || pm2 restart ansieyes
 pm2 save
 pm2 startup | grep -v "PM2" | bash || true
 
@@ -122,7 +122,7 @@ echo "   2. Update GitHub App webhook URL"
 echo "   3. Test: curl http://localhost:3000/health"
 echo ""
 echo "📋 Useful commands:"
-echo "   - View logs: pm2 logs github-pr-bot"
-echo "   - Restart: pm2 restart github-pr-bot"
+echo "   - View logs: pm2 logs ansieyes"
+echo "   - Restart: pm2 restart ansieyes"
 echo "   - Status: pm2 status"
 

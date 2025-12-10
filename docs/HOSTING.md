@@ -82,7 +82,7 @@ This guide covers various hosting options for deploying your GitHub bot.
    - Select "Web Service"
 
 3. **Configure**:
-   - **Name**: github-pr-bot
+   - **Name**: ansieyes
    - **Environment**: Python 3
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `python app.py`
@@ -270,7 +270,7 @@ This guide covers various hosting options for deploying your GitHub bot.
 
 1. **Build image**:
    ```bash
-   docker build -t github-pr-bot .
+   docker build -t ansieyes .
    ```
 
 2. **Run container**:
@@ -283,7 +283,7 @@ This guide covers various hosting options for deploying your GitHub bot.
      -e GITHUB_WEBHOOK_SECRET=your_secret \
      -e GITHUB_PRIVATE_KEY_PATH=/app/private-key.pem \
      -v $(pwd)/private-key.pem:/app/private-key.pem:ro \
-     github-pr-bot
+     ansieyes
    ```
 
 ### Deploy to cloud with Docker:
