@@ -194,7 +194,7 @@ This guide covers various hosting options for deploying your GitHub bot.
    pip install -r requirements.txt
    ```
 
-5. **Create systemd service** (`/etc/systemd/system/github-bot.service`):
+5. **Create systemd service** (`/etc/systemd/system/ansieyes.service`):
    ```ini
    [Unit]
    Description=GitHub PR Review Bot
@@ -215,11 +215,11 @@ This guide covers various hosting options for deploying your GitHub bot.
 6. **Start service**:
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl enable github-bot
-   sudo systemctl start github-bot
+   sudo systemctl enable ansieyes
+   sudo systemctl start ansieyes
    ```
 
-7. **Setup Nginx reverse proxy** (`/etc/nginx/sites-available/github-bot`):
+7. **Setup Nginx reverse proxy** (`/etc/nginx/sites-available/ansieyes`):
    ```nginx
    server {
        listen 80;
@@ -237,7 +237,7 @@ This guide covers various hosting options for deploying your GitHub bot.
 
 8. **Enable site and restart**:
    ```bash
-   sudo ln -s /etc/nginx/sites-available/github-bot /etc/nginx/sites-enabled/
+   sudo ln -s /etc/nginx/sites-available/ansieyes /etc/nginx/sites-enabled/
    sudo nginx -t
    sudo systemctl restart nginx
    ```
@@ -276,7 +276,7 @@ This guide covers various hosting options for deploying your GitHub bot.
 2. **Run container**:
    ```bash
    docker run -d \
-     --name github-bot \
+     --name ansieyes \
      -p 3000:3000 \
      -e GEMINI_API_KEY=your_key \
      -e GITHUB_APP_ID=123456 \

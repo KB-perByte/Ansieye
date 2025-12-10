@@ -46,24 +46,24 @@ Complete guide to deploy your GitHub bot on AWS.
 ```bash
 # Create security group
 aws ec2 create-security-group \
-  --group-name github-bot-sg \
+  --group-name ansieyes-sg \
   --description "Security group for GitHub PR Review Bot"
 
 # Allow HTTP, HTTPS, and SSH
 aws ec2 authorize-security-group-ingress \
-  --group-name github-bot-sg \
+  --group-name ansieyes-sg \
   --protocol tcp \
   --port 80 \
   --cidr 0.0.0.0/0
 
 aws ec2 authorize-security-group-ingress \
-  --group-name github-bot-sg \
+  --group-name ansieyes-sg \
   --protocol tcp \
   --port 443 \
   --cidr 0.0.0.0/0
 
 aws ec2 authorize-security-group-ingress \
-  --group-name github-bot-sg \
+  --group-name ansieyes-sg \
   --protocol tcp \
   --port 22 \
   --cidr YOUR_IP/32
@@ -73,7 +73,7 @@ aws ec2 run-instances \
   --image-id ami-0c55b159cbfafe1f0 \
   --instance-type t3.small \
   --key-name your-key-name \
-  --security-groups github-bot-sg \
+  --security-groups ansieyes-sg \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=github-pr-review-bot}]'
 ```
 
@@ -104,7 +104,7 @@ sudo npm install -g pm2
 
 ```bash
 # Clone your repository
-git clone https://github.com/yourusername/your-repo.git
+git clone https://github.com/KB-perByte/Ansieye.git
 cd your-repo
 
 # Create virtual environment
@@ -160,7 +160,7 @@ Skip to Step 7 if using IP directly.
 
 ```bash
 # Create Nginx configuration
-sudo nano /etc/nginx/sites-available/github-bot
+sudo nano /etc/nginx/sites-available/ansieyes
 ```
 
 Add this configuration:
@@ -189,7 +189,7 @@ server {
 Enable the site:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/github-bot /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/ansieyes /etc/nginx/sites-enabled/
 sudo nginx -t  # Test configuration
 sudo systemctl restart nginx
 ```
@@ -268,7 +268,7 @@ pm2 startup
 If you prefer systemd over PM2:
 
 ```bash
-sudo nano /etc/systemd/system/github-bot.service
+sudo nano /etc/systemd/system/ansieyes.service
 ```
 
 Add:
@@ -298,9 +298,9 @@ Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable github-bot
-sudo systemctl start github-bot
-sudo systemctl status github-bot
+sudo systemctl enable ansieyes
+sudo systemctl start ansieyes
+sudo systemctl status ansieyes
 ```
 
 ### Step 11: Update GitHub App Webhook
@@ -322,7 +322,7 @@ curl https://your-domain.com/health
 # Check logs
 pm2 logs github-pr-bot
 # OR
-sudo journalctl -u github-bot -f
+sudo journalctl -u ansieyes -f
 ```
 
 ### Step 13: Setup Auto-Deploy (Optional)
@@ -554,7 +554,7 @@ Store sensitive data in Secrets Manager:
 ```bash
 # Store secrets
 aws secretsmanager create-secret \
-  --name github-bot-secrets \
+  --name ansieyes-secrets \
   --secret-string '{"GEMINI_API_KEY":"your_key","GITHUB_APP_ID":"123","GITHUB_WEBHOOK_SECRET":"secret"}'
 
 # Update app.py to read from Secrets Manager
@@ -604,7 +604,7 @@ View logs:
 ```bash
 # Via AWS Console: CloudWatch → Log Groups
 # Or via CLI:
-aws logs tail /aws/ec2/github-bot --follow
+aws logs tail /aws/ec2/ansieyes --follow
 ```
 
 ### Setup Alarms
@@ -612,7 +612,7 @@ aws logs tail /aws/ec2/github-bot --follow
 ```bash
 # Create alarm for high CPU
 aws cloudwatch put-metric-alarm \
-  --alarm-name github-bot-high-cpu \
+  --alarm-name ansieyes-high-cpu \
   --alarm-description "Alert when CPU exceeds 80%" \
   --metric-name CPUUtilization \
   --namespace AWS/EC2 \
@@ -635,8 +635,8 @@ pm2 status
 pm2 logs github-pr-bot
 
 # Check systemd status
-sudo systemctl status github-bot
-sudo journalctl -u github-bot -n 50
+sudo systemctl status ansieyes
+sudo journalctl -u ansieyes -n 50
 
 # Check Nginx
 sudo nginx -t
@@ -668,15 +668,15 @@ pm2 restart github-pr-bot
 ```bash
 # View logs
 pm2 logs github-pr-bot
-sudo journalctl -u github-bot -f
+sudo journalctl -u ansieyes -f
 
 # Restart application
 pm2 restart github-pr-bot
-sudo systemctl restart github-bot
+sudo systemctl restart ansieyes
 
 # Check status
 pm2 status
-sudo systemctl status github-bot
+sudo systemctl status ansieyes
 
 # Update application
 cd /home/ubuntu/your-repo

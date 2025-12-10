@@ -1,7 +1,7 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  github-bot:
+  ansieyes:
     build: .
     ports:
       - "3000:3000"
@@ -10,4 +10,3 @@ services:
     volumes:
       - ./private-key.pem:/app/private-key.pem:ro
     restart: unless-stopped
-

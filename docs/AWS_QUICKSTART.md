@@ -38,7 +38,7 @@ ssh -i your-key.pem ubuntu@YOUR_EC2_IP
 
 # Run deployment script
 chmod +x aws-deploy.sh
-./aws-deploy.sh https://github.com/yourusername/your-repo.git
+./aws-deploy.sh https://github.com/KB-perByte/Ansieye.git
 ```
 
 **OR** manually:
@@ -54,7 +54,7 @@ sudo apt install -y nodejs
 sudo npm install -g pm2
 
 # Clone repository
-git clone https://github.com/yourusername/your-repo.git
+git clone https://github.com/KB-perByte/Ansieye.git
 cd your-repo
 
 # Setup Python environment
@@ -85,7 +85,7 @@ cat private-key.pem | base64 -w 0
 ### 4. Setup Nginx
 
 ```bash
-sudo nano /etc/nginx/sites-available/github-bot
+sudo nano /etc/nginx/sites-available/ansieyes
 ```
 
 Paste:
@@ -106,7 +106,7 @@ server {
 
 Enable and restart:
 ```bash
-sudo ln -s /etc/nginx/sites-available/github-bot /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/ansieyes /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx

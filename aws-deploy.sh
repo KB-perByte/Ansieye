@@ -21,7 +21,7 @@ fi
 
 # Variables
 APP_DIR="$HOME/github-pr-bot"
-REPO_URL="${1:-https://github.com/yourusername/your-repo.git}"
+REPO_URL="${1:-https://github.com/KB-perByte/Ansieye.git}"
 
 echo "📦 Installing system dependencies..."
 sudo apt update
@@ -62,7 +62,7 @@ fi
 
 echo ""
 echo "📋 Setting up Nginx..."
-sudo tee /etc/nginx/sites-available/github-bot > /dev/null <<EOF
+sudo tee /etc/nginx/sites-available/ansieyes > /dev/null <<EOF
 server {
     listen 80;
     server_name _;
@@ -82,7 +82,7 @@ server {
 EOF
 
 # Enable site
-sudo ln -sf /etc/nginx/sites-available/github-bot /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/ansieyes /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl restart nginx
 
