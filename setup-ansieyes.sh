@@ -384,26 +384,28 @@ setup_ai_issue_triage() {
     
     print_info "Installing AI-Issue-Triage dependencies..."
     
-    # Try pip3 first, then pip
-    if command -v pip3 &> /dev/null; then
-        if pip3 install -r requirements.txt; then
+    # Check if we're in an externally-managed environment
+    if python3 -m pip --version &>/dev/null; then
+        # Try regular pip install first
+        if pip3 install -r requirements.txt 2>&1 | grep -q "externally-managed-environment"; then
+            print_warning "Externally-managed Python environment detected"
+            print_info "Using --break-system-packages flag (safe for application installs)"
+            
+            if pip3 install --break-system-packages -r requirements.txt; then
+                print_success "AI-Issue-Triage dependencies installed"
+            else
+                print_error "Failed to install AI-Issue-Triage dependencies"
+                print_info "Try manually: cd $ai_triage_path && pip3 install --break-system-packages -r requirements.txt"
+                exit 1
+            fi
+        elif pip3 install -r requirements.txt; then
             print_success "AI-Issue-Triage dependencies installed"
         else
             print_error "Failed to install AI-Issue-Triage dependencies"
-            print_info "Try manually: cd $ai_triage_path && pip3 install -r requirements.txt"
-            exit 1
-        fi
-    elif command -v pip &> /dev/null; then
-        if pip install -r requirements.txt; then
-            print_success "AI-Issue-Triage dependencies installed"
-        else
-            print_error "Failed to install AI-Issue-Triage dependencies"
-            print_info "Try manually: cd $ai_triage_path && pip install -r requirements.txt"
             exit 1
         fi
     else
-        print_error "Neither pip nor pip3 found"
-        print_info "Please install pip first: sudo apt install python3-pip"
+        print_error "pip not available"
         exit 1
     fi
     
@@ -424,7 +426,20 @@ install_ansieyes_dependencies() {
     # Try pip3 first, then pip
     if command -v pip3 &> /dev/null; then
         print_info "Using pip3..."
-        if pip3 install -r requirements.txt; then
+        
+        # Check for externally-managed environment
+        if pip3 install -r requirements.txt 2>&1 | grep -q "externally-managed-environment"; then
+            print_warning "Externally-managed Python environment detected"
+            print_info "Using --break-system-packages flag (safe for application installs)"
+            
+            if pip3 install --break-system-packages -r requirements.txt; then
+                print_success "Dependencies installed successfully"
+            else
+                print_error "Failed to install dependencies"
+                print_info "Try manually: pip3 install --break-system-packages -r requirements.txt"
+                exit 1
+            fi
+        elif pip3 install -r requirements.txt; then
             print_success "Dependencies installed successfully"
         else
             print_error "Failed to install dependencies"
