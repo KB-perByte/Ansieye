@@ -564,6 +564,16 @@ For PR reviews, please use `@_ab_prreview` instead.
             logger.error(f"Failed to clean up temp directory: {e}")
             # Log this for monitoring - disk space issues can be serious
         
+        # Check if triage_result is valid
+        if not triage_result:
+            logger.error("Triage returned None - something went wrong")
+            # Delete processing comment
+            try:
+                processing_comment.delete()
+            except:
+                pass
+            return
+        
         # Format and post results
         comment_body = issue_triager.format_triage_comment(triage_result)
         issue.create_comment(comment_body)
