@@ -623,16 +623,13 @@ class IssueTriager:
         Returns:
             Formatted markdown comment
         """
-        comment = "## 🤖 AI Two-Pass Issue Triage\n\n"
-        
-        # Prompt injection check
+        # Prompt injection check - HIGH/CRITICAL blocks
         if triage_result.get("prompt_injection_check"):
             injection = triage_result["prompt_injection_check"]
             risk_level = injection.get("risk_level", "").lower()
             
-            # HIGH or CRITICAL - blocked
             if injection.get("is_injection") and risk_level in ['high', 'critical']:
-                comment += "## 🚫 Security Alert: High-Risk Prompt Injection Detected\n\n"
+                comment = "## 🚫 Security Alert: High-Risk Prompt Injection Detected\n\n"
                 comment += "This issue contains patterns that are attempting to manipulate the AI analysis.\n\n"
                 comment += f"**Risk Level**: {risk_level.upper()}\n"
                 comment += f"**Confidence**: {injection.get('confidence', 0) * 100:.1f}%\n"
@@ -642,71 +639,104 @@ class IssueTriager:
                 comment += f"**Detection Method**: {injection.get('method', 'unknown')}\n\n"
                 comment += "🚫 **Analysis has been halted for security reasons.**\n\n"
                 comment += "If this is a false positive, please rephrase the issue and try again.\n\n"
-                comment += "---\n*Powered by Ansieyes Security (AI-Issue-Triage)*"
+                comment += "---\n*Powered by Ansieyes Security*"
                 return comment
-            
-            # MEDIUM or LOW - show warning but continue
-            elif injection.get("is_injection") and risk_level in ['medium', 'low']:
-                comment += f"⚠️ **Security Notice**: {risk_level.upper()} risk patterns detected (confidence: {injection.get('confidence', 0) * 100:.0f}%). Analysis continued with caution.\n\n"
-                comment += "---\n\n"
         
         # Duplicate check
         if triage_result.get("duplicate_check"):
             dup = triage_result["duplicate_check"]
             if dup.get("is_duplicate"):
-                comment += "### 🔍 Duplicate Issue Detected\n\n"
-                comment += f"This issue appears to be a duplicate of #{dup['duplicate_of']['issue_id']}\n\n"
+                comment = "## 🔍 Duplicate Issue Detected\n\n"
+                comment += f"This issue appears to be a duplicate of **#{dup['duplicate_of']['issue_id']}**\n\n"
                 comment += f"**Similarity Score**: {dup.get('similarity_score', 0) * 100:.1f}%\n"
                 comment += f"**Confidence**: {dup.get('confidence_score', 0) * 100:.1f}%\n\n"
+                comment += "---\n*Powered by Ansieyes*"
                 return comment
         
-        # Librarian results
-        if triage_result.get("librarian"):
-            lib = triage_result["librarian"]
-            files = lib.get("relevant_files", [])
-            comment += f"### 📚 Pass 1: Librarian (File Identification)\n\n"
-            comment += f"Identified **{len(files)}** relevant file(s) for deep analysis:\n\n"
-            comment += "<details>\n<summary><b>View Identified Files</b></summary>\n\n"
-            for i, file in enumerate(files, 1):
-                comment += f"{i}. `{file}`\n"
-            comment += "\n</details>\n\n---\n\n"
+        # Main report - Surgeon results only
+        if not triage_result.get("surgeon"):
+            return "## ⚠️ Analysis Incomplete\n\nNo analysis results available.\n\n---\n*Powered by Ansieyes*"
         
-        # Surgeon results
-        if triage_result.get("surgeon"):
-            surg = triage_result["surgeon"]
-            if "error" not in surg:
-                comment += "### 🔬 Pass 2: Surgeon (Deep Analysis)\n\n"
-                
-                # Issue classification
-                issue_type = surg.get("issue_type", "unknown")
-                severity = surg.get("severity", "unknown")
-                confidence = surg.get("confidence_score", 0) * 100
-                
-                comment += f"**Type**: `{issue_type.upper()}`  \n"
-                comment += f"**Severity**: `{severity.upper()}`  \n"
-                comment += f"**Confidence**: `{confidence:.0f}%`\n\n"
-                
-                # Summary
-                if surg.get("analysis_summary"):
-                    comment += "#### Summary\n\n"
-                    comment += surg["analysis_summary"] + "\n\n"
-                
-                # Root cause
-                if surg.get("root_cause_analysis"):
-                    rca = surg["root_cause_analysis"]
-                    comment += "#### Root Cause\n\n"
-                    comment += f"> {rca.get('primary_cause', 'Not identified')}\n\n"
-                
-                # Proposed solutions
-                if surg.get("proposed_solutions"):
-                    comment += "#### Proposed Solutions\n\n"
-                    for i, sol in enumerate(surg["proposed_solutions"], 1):
-                        comment += f"{i}. {sol.get('description', 'No description')}\n"
-                    comment += "\n"
+        surg = triage_result["surgeon"]
         
+        if "error" in surg:
+            return f"## ❌ Analysis Failed\n\n{surg['error']}\n\n---\n*Powered by Ansieyes*"
+        
+        # Build the Ansieyes Report
+        from datetime import datetime
+        
+        comment = "# 🤖 Ansieyes Report\n\n"
+        
+        # Issue title/summary
+        if surg.get("analysis_summary"):
+            comment += f"**Issue**: {surg['analysis_summary']}\n\n"
+        
+        # Classification badges
+        issue_type = surg.get("issue_type", "unknown").upper()
+        severity = surg.get("severity", "unknown").upper()
+        confidence = surg.get("confidence_score", 0) * 100
+        
+        # Emoji mapping
+        type_emoji = {"BUG": "🐛", "FEATURE": "✨", "ENHANCEMENT": "⚡", "DOCUMENTATION": "📝"}.get(issue_type, "❓")
+        severity_emoji = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(severity, "⚪")
+        
+        comment += f"{type_emoji} **Type**: {issue_type}\n\n"
+        comment += f"{severity_emoji} **Severity**: {severity}\n\n"
+        comment += f"📊 **Confidence**: {confidence:.0f}%\n\n"
+        comment += f"⏰ **Generated**: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
         comment += "---\n\n"
-        comment += "<sub>🤖 *This analysis used the Two-Pass Architecture: "
-        comment += "Librarian identified relevant files, then Surgeon performed deep analysis.*</sub>"
+        
+        # Executive Summary
+        if surg.get("analysis_summary"):
+            comment += "## 📝 Executive Summary\n\n"
+            comment += surg["analysis_summary"] + "\n\n"
+            comment += "---\n\n"
+        
+        # Root Cause Analysis
+        if surg.get("root_cause_analysis"):
+            rca = surg["root_cause_analysis"]
+            comment += "## 🔍 Root Cause Analysis\n\n"
+            
+            if rca.get("primary_cause"):
+                comment += "### Primary Cause\n\n"
+                comment += rca["primary_cause"] + "\n\n"
+            
+            if rca.get("contributing_factors"):
+                comment += "### Contributing Factors\n\n"
+                for factor in rca["contributing_factors"]:
+                    comment += f"- {factor}\n"
+                comment += "\n"
+            
+            if rca.get("affected_components"):
+                comment += "### Affected Components\n\n"
+                for comp in rca["affected_components"]:
+                    comment += f"- `{comp}`\n"
+                comment += "\n"
+            
+            if rca.get("code_locations"):
+                comment += "### Related Code Locations\n\n"
+                for loc in rca["code_locations"]:
+                    comment += f"- `{loc}`\n"
+                comment += "\n"
+            
+            comment += "---\n\n"
+        
+        # Proposed Solutions
+        if surg.get("proposed_solutions"):
+            comment += "## 💡 Proposed Solutions\n\n"
+            for i, sol in enumerate(surg["proposed_solutions"], 1):
+                comment += f"### Solution {i}\n\n"
+                if sol.get("description"):
+                    comment += sol["description"] + "\n\n"
+                
+                if sol.get("implementation_details"):
+                    comment += "#### 📍 Implementation Details\n\n"
+                    comment += sol["implementation_details"] + "\n\n"
+            
+            comment += "---\n\n"
+        
+        # Footer
+        comment += "<sub>🤖 *This analysis was generated by Ansieyes AI. Please review carefully and validate before implementing.*</sub>\n"
         
         return comment
 

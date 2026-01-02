@@ -277,29 +277,108 @@ Changed Files:
         return review_comments
 
     def format_review_summary(self, review_comments: Dict) -> str:
-        """Format review comments for GitHub comment"""
+        """Format review comments as Ansieyes PR Review Report"""
+        from datetime import datetime
+        
         summary = review_comments.get("summary", "")
-
-        # Add header
-        formatted = "## 🤖 AI Code Review (Powered by Gemini)\n\n"
-        formatted += summary
-
+        
+        # Parse the summary to extract key information
+        # Try to extract overall assessment, strengths, issues, etc. from the summary
+        lines = summary.split('\n')
+        
+        # Start with Ansieyes header
+        formatted = "# 🤖 Ansieyes PR Review\n\n"
+        
+        # Add metadata
+        formatted += f"⏰ **Generated**: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+        formatted += "---\n\n"
+        
+        # Try to extract sections from summary
+        current_section = ""
+        section_content = {}
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Detect section headers (numbers followed by periods or markdown headers)
+            if line.startswith('1.') or line.startswith('# 1.') or 'Overall Assessment' in line:
+                current_section = "overall"
+                section_content[current_section] = []
+            elif line.startswith('2.') or line.startswith('# 2.') or 'Strengths' in line:
+                current_section = "strengths"
+                section_content[current_section] = []
+            elif line.startswith('3.') or line.startswith('# 3.') or 'Issues Found' in line or 'Issues' in line:
+                current_section = "issues"
+                section_content[current_section] = []
+            elif line.startswith('4.') or line.startswith('# 4.') or 'Suggestions' in line or 'Recommendations' in line:
+                current_section = "suggestions"
+                section_content[current_section] = []
+            elif line.startswith('5.') or line.startswith('# 5.') or 'File-specific' in line:
+                current_section = "file_comments"
+                section_content[current_section] = []
+            elif current_section and not line.startswith('#'):
+                section_content.setdefault(current_section, []).append(line)
+        
+        # Format Overall Assessment
+        if "overall" in section_content:
+            formatted += "## 📊 Overall Assessment\n\n"
+            formatted += '\n'.join(section_content["overall"]) + "\n\n"
+            formatted += "---\n\n"
+        
+        # Format Strengths
+        if "strengths" in section_content and section_content["strengths"]:
+            formatted += "## ✅ Strengths\n\n"
+            for item in section_content["strengths"]:
+                if item and not item.startswith('**'):
+                    formatted += f"- {item}\n"
+                else:
+                    formatted += f"{item}\n"
+            formatted += "\n---\n\n"
+        
+        # Format Issues Found
+        if "issues" in section_content and section_content["issues"]:
+            formatted += "## ⚠️ Issues Found\n\n"
+            for item in section_content["issues"]:
+                if item and not item.startswith('**'):
+                    formatted += f"- {item}\n"
+                else:
+                    formatted += f"{item}\n"
+            formatted += "\n---\n\n"
+        
+        # Format Suggestions
+        if "suggestions" in section_content and section_content["suggestions"]:
+            formatted += "## 💡 Recommendations\n\n"
+            for item in section_content["suggestions"]:
+                if item and not item.startswith('**'):
+                    formatted += f"- {item}\n"
+                else:
+                    formatted += f"{item}\n"
+            formatted += "\n---\n\n"
+        
         # Add file-specific comments if any
         file_comments = review_comments.get("file_comments", [])
         if file_comments:
-            formatted += "\n\n### File-specific Comments\n\n"
+            formatted += "## 📁 File-Specific Comments\n\n"
             for comment in file_comments:
                 path = comment.get("path", "unknown")
                 line = comment.get("line", "")
                 comment_text = comment.get("comment", "")
-
-                formatted += f"**`{path}`**"
+                
+                formatted += f"### `{path}`"
                 if line:
-                    formatted += f" (line {line})"
-                formatted += f":\n{comment_text}\n\n"
-
-        formatted += "\n---\n*This review was generated automatically by the Gemini AI Code Review Bot.*"
-
+                    formatted += f" (Line {line})"
+                formatted += f"\n\n{comment_text}\n\n"
+        
+        # If no sections were parsed, just output the summary as-is
+        if not section_content:
+            formatted += summary + "\n\n"
+        
+        # Footer
+        formatted += "---\n\n"
+        formatted += "<sub>🤖 *This review was generated by Ansieyes AI. Please review carefully before implementing changes.*</sub>\n"
+        
         return formatted
 
     def analyze_workflow_run(
