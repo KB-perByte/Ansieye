@@ -598,49 +598,53 @@ For PR reviews, please use `@_ab_prreview` instead.
             logger.warning(f"Could not remove old labels: {e}")
         
         # Determine which labels to add based on triage result
+        # Check in order: blocked prompt injection > duplicate > normal triage
         
         # Case 1: HIGH/CRITICAL prompt injection (blocked)
+        is_blocked = False
         if triage_result.get("prompt_injection_check"):
             injection = triage_result["prompt_injection_check"]
             risk_level = injection.get("risk_level", "").lower()
             
             if injection.get("is_injection") and risk_level in ['high', 'critical']:
+                is_blocked = True
                 labels_to_add.append("Prompt injection blocked")
                 logger.info("Adding prompt injection blocked label")
         
-        # Case 2: Duplicate issue
-        elif triage_result.get("duplicate_check", {}).get("is_duplicate"):
+        # Case 2: Duplicate issue (only if not blocked)
+        if not is_blocked and triage_result.get("duplicate_check", {}).get("is_duplicate"):
             labels_to_add.append("duplicate")
             labels_to_add.append("ai-triaged")
             logger.info("Adding duplicate labels")
         
-        # Case 3: Normal triage with Surgeon results
-        elif triage_result.get("surgeon"):
-            surgeon = triage_result["surgeon"]
-            
-            if not surgeon.get("error") and "formatted_output" in surgeon:
-                # Extract type and severity from formatted text output
-                import re
-                formatted_text = surgeon["formatted_output"]
+        # Case 3: Normal triage with Surgeon results (only if not blocked and not duplicate)
+        if not is_blocked and not triage_result.get("duplicate_check", {}).get("is_duplicate"):
+            if triage_result.get("surgeon"):
+                surgeon = triage_result["surgeon"]
                 
-                # Extract: 🐛 **Type:** `BUG`
-                type_match = re.search(r'\*\*Type:\*\*\s+`([^`]+)`', formatted_text)
-                issue_type = type_match.group(1).lower() if type_match else ""
-                
-                # Extract: 🟡 **Severity:** `MEDIUM`
-                severity_match = re.search(r'\*\*Severity:\*\*\s+`([^`]+)`', formatted_text)
-                severity = severity_match.group(1).lower() if severity_match else ""
-                
-                # Add Type and Severity labels
-                if issue_type:
-                    type_label = f"Type : {issue_type.capitalize()}"
-                    labels_to_add.append(type_label)
-                
-                if severity:
-                    severity_label = f"Severity : {severity.capitalize()}"
-                    labels_to_add.append(severity_label)
-                
-                labels_to_add.append("ai-triaged")
+                if not surgeon.get("error") and "formatted_output" in surgeon:
+                    # Extract type and severity from formatted text output
+                    import re
+                    formatted_text = surgeon["formatted_output"]
+                    
+                    # Extract: 🐛 **Type:** `BUG`
+                    type_match = re.search(r'\*\*Type:\*\*\s+`([^`]+)`', formatted_text)
+                    issue_type = type_match.group(1).lower() if type_match else ""
+                    
+                    # Extract: 🟡 **Severity:** `MEDIUM`
+                    severity_match = re.search(r'\*\*Severity:\*\*\s+`([^`]+)`', formatted_text)
+                    severity = severity_match.group(1).lower() if severity_match else ""
+                    
+                    # Add Type and Severity labels
+                    if issue_type:
+                        type_label = f"Type : {issue_type.capitalize()}"
+                        labels_to_add.append(type_label)
+                    
+                    if severity:
+                        severity_label = f"Severity : {severity.capitalize()}"
+                        labels_to_add.append(severity_label)
+                    
+                    labels_to_add.append("ai-triaged")
         
         # Apply all new labels
         if labels_to_add:
