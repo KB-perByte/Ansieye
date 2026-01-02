@@ -28,20 +28,27 @@ class IssueTriager:
         self.api_key = api_key or os.getenv('GEMINI_API_KEY')
         self.ai_triage_path = Path(ai_triage_path)
         
-        # Add AI-Issue-Triage to Python path for imports
-        if str(self.ai_triage_path) not in sys.path:
-            sys.path.insert(0, str(self.ai_triage_path))
+        # Try to load prompt injection detector from AI-Issue-Triage
+        self.detect_prompt_injection_func = None
+        self.InjectionRisk = None
         
-        # Import prompt injection detector from AI-Issue-Triage
         try:
+            # Add AI-Issue-Triage to Python path for imports
+            ai_triage_str = str(self.ai_triage_path)
+            if ai_triage_str not in sys.path:
+                sys.path.insert(0, ai_triage_str)
+            
+            # Import prompt injection detector from AI-Issue-Triage
             from utils.security.prompt_injection import detect_prompt_injection, InjectionRisk
             self.detect_prompt_injection_func = detect_prompt_injection
             self.InjectionRisk = InjectionRisk
-            logger.info("Loaded prompt injection detector from AI-Issue-Triage")
+            logger.info("✓ Loaded prompt injection detector from AI-Issue-Triage")
         except ImportError as e:
-            logger.error(f"Failed to import prompt injection detector: {e}")
-            self.detect_prompt_injection_func = None
-            self.InjectionRisk = None
+            logger.warning(f"Failed to import prompt injection detector: {e}")
+            logger.warning("Prompt injection detection will be disabled")
+        except Exception as e:
+            logger.error(f"Unexpected error loading prompt injection detector: {e}")
+            logger.warning("Prompt injection detection will be disabled")
         
         if not self.ai_triage_path.exists():
             raise ValueError(f"AI-Issue-Triage not found at {ai_triage_path}")
@@ -64,13 +71,13 @@ class IssueTriager:
             - detected_patterns: list of detected patterns
         """
         if not self.detect_prompt_injection_func:
-            logger.warning("Prompt injection detection not available")
+            logger.debug("Prompt injection detection not available - skipping check")
             return {
                 "is_injection": False,
                 "risk_level": "safe",
                 "confidence": 0.0,
                 "detected_patterns": [],
-                "error": "Detection module not available"
+                "disabled": True
             }
         
         try:
@@ -86,7 +93,8 @@ class IssueTriager:
                 "details": result.details
             }
         except Exception as e:
-            logger.error(f"Prompt injection check failed: {e}")
+            logger.error(f"Prompt injection check failed: {e}", exc_info=True)
+            # Return safe to not block analysis if detector fails
             return {
                 "is_injection": False,
                 "risk_level": "safe",
