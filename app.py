@@ -7,12 +7,14 @@ import hmac
 import hashlib
 import base64
 import logging
+import subprocess
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from github import Github
 from github.GithubException import GithubException
 import google.generativeai as genai
 from pr_reviewer import PRReviewer
+from issue_triager import IssueTriager
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +33,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GITHUB_APP_ID = os.getenv('GITHUB_APP_ID')
 GITHUB_PRIVATE_KEY_PATH = os.getenv('GITHUB_PRIVATE_KEY_PATH')
 GITHUB_WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET')
+AI_TRIAGE_PATH = os.getenv('AI_TRIAGE_PATH', '/Users/shvenkat/Documents/AI/AI-Issue-Triage')
 PORT = int(os.getenv('PORT', 3000))
 HOST = os.getenv('HOST', '0.0.0.0')
 
@@ -42,6 +45,9 @@ else:
 
 # Initialize PR Reviewer
 pr_reviewer = PRReviewer(GEMINI_API_KEY)
+
+# Initialize Issue Triager
+issue_triager = IssueTriager(GEMINI_API_KEY, AI_TRIAGE_PATH)
 
 
 def verify_webhook_signature(payload_body, signature_header):
@@ -162,6 +168,38 @@ def webhook():
             except Exception as e:
                 logger.error(f"Error processing workflow run: {e}")
                 return jsonify({"error": str(e)}), 500
+
+        return jsonify({"status": "processed"}), 200
+
+    # Handle issue comment events (for mention-based triggers)
+    if event_type == 'issue_comment':
+        action = payload.get('action')
+        logger.info(f"Issue comment action: {action}")
+
+        if action == 'created':
+            comment_body = payload.get('comment', {}).get('body', '').strip()
+            installation_id = payload.get('installation', {}).get('id')
+            
+            if not installation_id:
+                logger.error("No installation ID found in webhook payload")
+                return jsonify({"error": "No installation ID"}), 400
+
+            # Check for EXACT mention triggers (no extra text allowed)
+            if comment_body == '@_ab_triage':
+                logger.info("Detected exact @_ab_triage mention")
+                try:
+                    handle_triage_mention(payload, installation_id)
+                except Exception as e:
+                    logger.error(f"Error processing triage mention: {e}")
+                    return jsonify({"error": str(e)}), 500
+                    
+            elif comment_body == '@_ab_prreview':
+                logger.info("Detected exact @_ab_prreview mention")
+                try:
+                    handle_pr_review_mention(payload, installation_id)
+                except Exception as e:
+                    logger.error(f"Error processing PR review mention: {e}")
+                    return jsonify({"error": str(e)}), 500
 
         return jsonify({"status": "processed"}), 200
 
@@ -401,6 +439,276 @@ def format_workflow_comment(analysis, workflow_name, conclusion, failed_jobs, wo
     comment += "\n\n---\n*This analysis was generated automatically by the Gemini AI Code Review Bot.*"
 
     return comment
+
+
+def handle_triage_mention(payload, installation_id):
+    """Handle @_ab_triage mention in issue or PR comments"""
+    issue_data = payload.get('issue', {})
+    repo_full_name = payload.get('repository', {}).get('full_name')
+    issue_number = issue_data.get('number')
+    comment_url = payload.get('comment', {}).get('html_url')
+    
+    # Check if this is a PR (pull_request field exists in issue data)
+    is_pull_request = 'pull_request' in issue_data
+    
+    logger.info(f"Triage mention on {'PR' if is_pull_request else 'issue'} #{issue_number} in {repo_full_name}")
+    
+    # Get GitHub client
+    github_client = get_github_client(installation_id)
+    if not github_client:
+        logger.error("Failed to create GitHub client")
+        return
+    
+    try:
+        repo = github_client.get_repo(repo_full_name)
+        issue = repo.get_issue(issue_number)
+        
+        # Validation: @_ab_triage should only work on issues, not PRs
+        if is_pull_request:
+            error_comment = """## ⚠️ Invalid Command
+
+`@_ab_triage` can only be used on **issues**, not pull requests.
+
+For PR reviews, please use `@_ab_prreview` instead.
+
+---
+*This is an automated response from Ansieyes.*"""
+            issue.create_comment(error_comment)
+            logger.warning(f"@_ab_triage used on PR #{issue_number}, posted error message")
+            return
+        
+        # Post processing message
+        processing_comment = issue.create_comment(
+            "## 🤖 AI Issue Triage Initiated\n\n"
+            "Starting two-pass analysis:\n"
+            "1. 📚 **Librarian**: Identifying relevant files...\n"
+            "2. 🔬 **Surgeon**: Performing deep analysis...\n\n"
+            "This may take a few minutes. Results will be posted here.\n\n"
+            "---\n*Powered by Ansieyes + AI-Issue-Triage*"
+        )
+        
+        # Get issue details
+        title = issue.title
+        body = issue.body or ""
+        repo_url = payload.get('repository', {}).get('clone_url')
+        
+        # Clone repository to check for triage.config.json and .omit-triage
+        logger.info("Cloning repository to fetch configuration files...")
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        cloned_repo_path = os.path.join(temp_dir, 'repo')
+        
+        try:
+            subprocess.run(
+                ['git', 'clone', '--depth', '1', repo_url, cloned_repo_path],
+                capture_output=True,
+                check=True,
+                timeout=60
+            )
+            logger.info(f"Repository cloned to {cloned_repo_path}")
+        except Exception as e:
+            logger.error(f"Failed to clone repository: {e}")
+            issue.create_comment(
+                "## ⚠️ Configuration Error\n\n"
+                "Could not clone repository to fetch triage configuration.\n\n"
+                f"Error: {str(e)}\n\n"
+                "---\n*Powered by Ansieyes*"
+            )
+            return
+        
+        # Fetch existing issues for duplicate detection
+        logger.info("Fetching existing issues for duplicate detection...")
+        existing_issues = []
+        try:
+            for existing_issue in repo.get_issues(state='open'):
+                if existing_issue.number != issue_number:
+                    existing_issues.append({
+                        'issue_id': str(existing_issue.number),
+                        'title': existing_issue.title,
+                        'description': existing_issue.body or '',
+                        'status': existing_issue.state,
+                        'created_date': existing_issue.created_at.isoformat(),
+                        'url': existing_issue.html_url
+                    })
+        except Exception as e:
+            logger.warning(f"Could not fetch existing issues: {e}")
+        
+        # Run triage with cloned repo path (contains config files)
+        logger.info(f"Running triage for issue #{issue_number}...")
+        triage_result = issue_triager.triage_issue(
+            title=title,
+            description=body,
+            repo_url=repo_url,
+            existing_issues=existing_issues if existing_issues else None,
+            repo_path=cloned_repo_path
+        )
+        
+        # Clean up cloned repository
+        try:
+            import shutil
+            shutil.rmtree(temp_dir)
+        except Exception as e:
+            logger.warning(f"Failed to clean up temp directory: {e}")
+        
+        # Format and post results
+        comment_body = issue_triager.format_triage_comment(triage_result)
+        issue.create_comment(comment_body)
+        
+        # Delete processing comment
+        try:
+            processing_comment.delete()
+        except:
+            pass
+        
+        # Add labels based on analysis
+        if triage_result.get("surgeon"):
+            surgeon = triage_result["surgeon"]
+            labels_to_add = []
+            
+            if not surgeon.get("error"):
+                issue_type = surgeon.get("issue_type", "").lower()
+                severity = surgeon.get("severity", "").lower()
+                
+                if issue_type:
+                    type_label = f"Type : {issue_type.capitalize()}"
+                    labels_to_add.append(type_label)
+                
+                if severity:
+                    severity_label = f"Severity : {severity.capitalize()}"
+                    labels_to_add.append(severity_label)
+                
+                labels_to_add.append("ai-triaged")
+                
+                if labels_to_add:
+                    try:
+                        issue.add_to_labels(*labels_to_add)
+                        logger.info(f"Added labels: {labels_to_add}")
+                    except Exception as e:
+                        logger.warning(f"Could not add labels: {e}")
+        
+        # Check for duplicate
+        if triage_result.get("duplicate_check", {}).get("is_duplicate"):
+            try:
+                issue.add_to_labels("duplicate")
+            except Exception as e:
+                logger.warning(f"Could not add duplicate label: {e}")
+        
+        logger.info(f"Triage completed for issue #{issue_number}")
+        
+    except GithubException as e:
+        logger.error(f"GitHub API error: {e}")
+    except Exception as e:
+        logger.error(f"Error handling triage mention: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def handle_pr_review_mention(payload, installation_id):
+    """Handle @_ab_prreview mention in issue or PR comments"""
+    issue_data = payload.get('issue', {})
+    repo_full_name = payload.get('repository', {}).get('full_name')
+    issue_number = issue_data.get('number')
+    comment_url = payload.get('comment', {}).get('html_url')
+    
+    # Check if this is a PR (pull_request field exists in issue data)
+    is_pull_request = 'pull_request' in issue_data
+    
+    logger.info(f"PR review mention on {'PR' if is_pull_request else 'issue'} #{issue_number} in {repo_full_name}")
+    
+    # Get GitHub client
+    github_client = get_github_client(installation_id)
+    if not github_client:
+        logger.error("Failed to create GitHub client")
+        return
+    
+    try:
+        repo = github_client.get_repo(repo_full_name)
+        issue = repo.get_issue(issue_number)
+        
+        # Validation: @_ab_prreview should only work on PRs, not issues
+        if not is_pull_request:
+            error_comment = """## ⚠️ Invalid Command
+
+`@_ab_prreview` can only be used on **pull requests**, not regular issues.
+
+For issue triage, please use `@_ab_triage` instead.
+
+---
+*This is an automated response from Ansieyes.*"""
+            issue.create_comment(error_comment)
+            logger.warning(f"@_ab_prreview used on issue #{issue_number}, posted error message")
+            return
+        
+        # Get the PR object
+        pr = repo.get_pull(issue_number)
+        
+        # Post processing message
+        processing_comment = issue.create_comment(
+            "## 🤖 AI PR Review Initiated\n\n"
+            "Analyzing pull request changes...\n\n"
+            "This may take a few moments. Results will be posted here.\n\n"
+            "---\n*Powered by Ansieyes*"
+        )
+        
+        # Get PR details
+        title = pr.title
+        body = pr.body or ""
+        
+        # Get file changes
+        files = pr.get_files()
+        file_changes = []
+        
+        for file in files:
+            file_info = {
+                'filename': file.filename,
+                'status': file.status,
+                'additions': file.additions,
+                'deletions': file.deletions,
+                'changes': file.changes,
+                'patch': file.patch if hasattr(file, 'patch') else None
+            }
+            file_changes.append(file_info)
+        
+        logger.info(f"Found {len(file_changes)} changed files in PR #{issue_number}")
+        
+        # Get repo URL for prompt selection
+        repo_url = payload.get('repository', {}).get('html_url', '') or repo.html_url
+        
+        # Generate review using Gemini
+        review_comments = pr_reviewer.review_pr(
+            title=title,
+            body=body,
+            file_changes=file_changes,
+            repo_url=repo_url
+        )
+        
+        if not review_comments:
+            logger.warning("No review comments generated")
+            issue.create_comment(
+                "## ⚠️ Review Failed\n\n"
+                "Could not generate review comments. Please check logs.\n\n"
+                "---\n*Powered by Ansieyes*"
+            )
+            return
+        
+        # Post review comments
+        summary_body = pr_reviewer.format_review_summary(review_comments)
+        issue.create_comment(summary_body)
+        
+        # Delete processing comment
+        try:
+            processing_comment.delete()
+        except:
+            pass
+        
+        logger.info(f"PR review completed for PR #{issue_number}")
+        
+    except GithubException as e:
+        logger.error(f"GitHub API error: {e}")
+    except Exception as e:
+        logger.error(f"Error handling PR review mention: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
