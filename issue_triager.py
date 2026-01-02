@@ -8,6 +8,7 @@ import os
 import json
 import tempfile
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -27,11 +28,72 @@ class IssueTriager:
         self.api_key = api_key or os.getenv('GEMINI_API_KEY')
         self.ai_triage_path = Path(ai_triage_path)
         
+        # Add AI-Issue-Triage to Python path for imports
+        if str(self.ai_triage_path) not in sys.path:
+            sys.path.insert(0, str(self.ai_triage_path))
+        
+        # Import prompt injection detector from AI-Issue-Triage
+        try:
+            from utils.security.prompt_injection import detect_prompt_injection, InjectionRisk
+            self.detect_prompt_injection_func = detect_prompt_injection
+            self.InjectionRisk = InjectionRisk
+            logger.info("Loaded prompt injection detector from AI-Issue-Triage")
+        except ImportError as e:
+            logger.error(f"Failed to import prompt injection detector: {e}")
+            self.detect_prompt_injection_func = None
+            self.InjectionRisk = None
+        
         if not self.ai_triage_path.exists():
             raise ValueError(f"AI-Issue-Triage not found at {ai_triage_path}")
         
         if not self.api_key:
             logger.warning("Gemini API key not provided")
+
+    def check_prompt_injection(self, text: str) -> Dict:
+        """
+        Check if text contains prompt injection attempts using AI-Issue-Triage's detector
+        
+        Args:
+            text: Text to check for prompt injection
+            
+        Returns:
+            Dictionary with:
+            - is_injection: bool
+            - risk_level: str (safe, low, medium, high, critical)
+            - confidence: float (0-1)
+            - detected_patterns: list of detected patterns
+        """
+        if not self.detect_prompt_injection_func:
+            logger.warning("Prompt injection detection not available")
+            return {
+                "is_injection": False,
+                "risk_level": "safe",
+                "confidence": 0.0,
+                "detected_patterns": [],
+                "error": "Detection module not available"
+            }
+        
+        try:
+            # Use AI-Issue-Triage's comprehensive detection
+            result = self.detect_prompt_injection_func(text, strict_mode=False)
+            
+            return {
+                "is_injection": result.is_injection,
+                "risk_level": result.risk_level.value,
+                "confidence": result.confidence_score,
+                "detected_patterns": result.detected_patterns[:5],  # Limit to top 5
+                "method": "ai-issue-triage",
+                "details": result.details
+            }
+        except Exception as e:
+            logger.error(f"Prompt injection check failed: {e}")
+            return {
+                "is_injection": False,
+                "risk_level": "safe",
+                "confidence": 0.0,
+                "detected_patterns": [],
+                "error": str(e)
+            }
 
     def check_for_duplicates(
         self,
@@ -326,15 +388,34 @@ class IssueTriager:
             
         Returns:
             Dictionary with complete triage results including:
+            - prompt_injection_check: Prompt injection detection results
             - duplicate_check: Duplicate detection results
             - librarian: File identification results
             - surgeon: Deep analysis results
         """
         result = {
+            "prompt_injection_check": None,
             "duplicate_check": None,
             "librarian": None,
             "surgeon": None
         }
+        
+        # Step 0: Check for prompt injection attempts
+        logger.info("Running prompt injection check...")
+        combined_text = f"{title}\n\n{description}"
+        injection_check = self.check_prompt_injection(combined_text)
+        result["prompt_injection_check"] = injection_check
+        
+        # Block only if HIGH or CRITICAL risk detected
+        risk_levels_to_block = ['high', 'critical']
+        if injection_check.get("is_injection") and injection_check.get("risk_level") in risk_levels_to_block:
+            logger.warning(f"High-risk prompt injection detected: {injection_check}")
+            result["error"] = "High-risk prompt injection attempt detected"
+            return result
+        
+        # Log but continue for MEDIUM/LOW risk
+        if injection_check.get("is_injection"):
+            logger.info(f"Low/medium risk patterns detected but continuing: {injection_check.get('risk_level')}")
         
         # Step 1: Check for duplicates if existing issues provided
         if existing_issues:
@@ -466,6 +547,31 @@ class IssueTriager:
             Formatted markdown comment
         """
         comment = "## 🤖 AI Two-Pass Issue Triage\n\n"
+        
+        # Prompt injection check
+        if triage_result.get("prompt_injection_check"):
+            injection = triage_result["prompt_injection_check"]
+            risk_level = injection.get("risk_level", "").lower()
+            
+            # HIGH or CRITICAL - blocked
+            if injection.get("is_injection") and risk_level in ['high', 'critical']:
+                comment += "## 🚫 Security Alert: High-Risk Prompt Injection Detected\n\n"
+                comment += "This issue contains patterns that are attempting to manipulate the AI analysis.\n\n"
+                comment += f"**Risk Level**: {risk_level.upper()}\n"
+                comment += f"**Confidence**: {injection.get('confidence', 0) * 100:.1f}%\n"
+                if injection.get("detected_patterns"):
+                    patterns_str = ', '.join([f'`{p[:30]}...`' if len(p) > 30 else f'`{p}`' for p in injection['detected_patterns'][:3]])
+                    comment += f"**Flagged Patterns**: {patterns_str}\n"
+                comment += f"**Detection Method**: {injection.get('method', 'unknown')}\n\n"
+                comment += "🚫 **Analysis has been halted for security reasons.**\n\n"
+                comment += "If this is a false positive, please rephrase the issue and try again.\n\n"
+                comment += "---\n*Powered by Ansieyes Security (AI-Issue-Triage)*"
+                return comment
+            
+            # MEDIUM or LOW - show warning but continue
+            elif injection.get("is_injection") and risk_level in ['medium', 'low']:
+                comment += f"⚠️ **Security Notice**: {risk_level.upper()} risk patterns detected (confidence: {injection.get('confidence', 0) * 100:.0f}%). Analysis continued with caution.\n\n"
+                comment += "---\n\n"
         
         # Duplicate check
         if triage_result.get("duplicate_check"):
