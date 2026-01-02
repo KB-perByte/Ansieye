@@ -481,12 +481,9 @@ For PR reviews, please use `@_ab_prreview` instead.
         
         # Post processing message
         processing_comment = issue.create_comment(
-            "## 🤖 AI Issue Triage Initiated\n\n"
-            "Starting two-pass analysis:\n"
-            "1. 📚 **Librarian**: Identifying relevant files...\n"
-            "2. 🔬 **Surgeon**: Performing deep analysis...\n\n"
+            "## Ansieyes Issue Triage has been Initiated\n\n"
             "This may take a few minutes. Results will be posted here.\n\n"
-            "---\n*Powered by Ansieyes + AI-Issue-Triage*"
+            "---\n*Powered by Ansieyes using AI-Issue-Triage*"
         )
         
         # Get issue details
@@ -686,10 +683,10 @@ For issue triage, please use `@_ab_triage` instead.
         
         # Post processing message
         processing_comment = issue.create_comment(
-            "## 🤖 AI PR Review Initiated\n\n"
+            "## Ansieyes PR Review Initiated\n\n"
             "Analyzing pull request changes...\n\n"
             "This may take a few moments. Results will be posted here.\n\n"
-            "---\n*Powered by Ansieyes*"
+            "---\n*Powered by Ansieyes using AI-Issue-Triage*"
         )
         
         # Get PR details
@@ -716,26 +713,25 @@ For issue triage, please use `@_ab_triage` instead.
         # Get repo URL for prompt selection
         repo_url = payload.get('repository', {}).get('html_url', '') or repo.html_url
         
-        # Generate review using Gemini
-        review_comments = pr_reviewer.review_pr(
+        # Generate review using AI-Issue-Triage
+        review_text = pr_reviewer.review_pr(
             title=title,
             body=body,
             file_changes=file_changes,
             repo_url=repo_url
         )
         
-        if not review_comments:
-            logger.warning("No review comments generated")
-            issue.create_comment(
+        if not review_text or review_text.startswith("❌"):
+            logger.warning("No review generated or error occurred")
+            issue.create_comment(review_text or 
                 "## ⚠️ Review Failed\n\n"
                 "Could not generate review comments. Please check logs.\n\n"
                 "---\n*Powered by Ansieyes*"
             )
             return
         
-        # Post review comments
-        summary_body = pr_reviewer.format_review_summary(review_comments)
-        issue.create_comment(summary_body)
+        # Post review (already formatted by AI-Issue-Triage)
+        issue.create_comment(review_text)
         
         # Delete processing comment
         try:
