@@ -616,7 +616,7 @@ class IssueTriager:
 
     def format_triage_comment(self, triage_result: Dict) -> str:
         """
-        Format triage results as a GitHub comment
+        Format triage results as a GitHub comment using AI-Issue-Triage style
         
         Args:
             triage_result: Results from triage_issue()
@@ -624,34 +624,80 @@ class IssueTriager:
         Returns:
             Formatted markdown comment
         """
-        # Prompt injection check - HIGH/CRITICAL blocks
+        from datetime import datetime
+        
+        # Prompt injection check - HIGH/CRITICAL blocks (formatted like AI-Issue-Triage)
         if triage_result.get("prompt_injection_check"):
             injection = triage_result["prompt_injection_check"]
             risk_level = injection.get("risk_level", "").lower()
             
+            # Get emoji based on risk level
+            risk_emoji_map = {
+                "safe": "✅",
+                "low": "🟢", 
+                "medium": "🟡",
+                "high": "🟠",
+                "critical": "🔴"
+            }
+            risk_emoji = risk_emoji_map.get(risk_level, "⚠️")
+            
             if injection.get("is_injection") and risk_level in ['high', 'critical']:
-                comment = "## 🚫 Security Alert: High-Risk Prompt Injection Detected\n\n"
+                comment = "# 🤖 Ansieyes Report\n\n"
+                comment += f"## {risk_emoji} Security Alert: High-Risk Prompt Injection Detected\n\n"
                 comment += "This issue contains patterns that are attempting to manipulate the AI analysis.\n\n"
-                comment += f"**Risk Level**: {risk_level.upper()}\n"
-                comment += f"**Confidence**: {injection.get('confidence', 0) * 100:.1f}%\n"
+                
+                confidence_percent = int(injection.get("confidence", 0) * 100)
+                comment += f"🔴 **Risk Level:** `{risk_level.upper()}`  \n"
+                comment += f"📊 **Confidence:** `{confidence_percent}%`  \n"
+                comment += f"⏰ **Generated:** `{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}`\n\n"
+                comment += "---\n\n"
+                
                 if injection.get("detected_patterns"):
-                    patterns_str = ', '.join([f'`{p[:30]}...`' if len(p) > 30 else f'`{p}`' for p in injection['detected_patterns'][:3]])
-                    comment += f"**Flagged Patterns**: {patterns_str}\n"
-                comment += f"**Detection Method**: {injection.get('method', 'unknown')}\n\n"
-                comment += "🚫 **Analysis has been halted for security reasons.**\n\n"
+                    comment += "### 🚨 Flagged Patterns\n\n"
+                    for i, pattern in enumerate(injection['detected_patterns'][:3], 1):
+                        pattern_preview = pattern[:50] + '...' if len(pattern) > 50 else pattern
+                        comment += f"{i}. `{pattern_preview}`\n"
+                    comment += "\n"
+                
+                comment += "### 🚫 Action Taken\n\n"
+                comment += "**Analysis has been halted for security reasons.**\n\n"
                 comment += "If this is a false positive, please rephrase the issue and try again.\n\n"
-                comment += "---\n*Powered by Ansieyes Security*"
+                comment += "---\n"
+                comment += "<sub>🔒 *Powered by Ansieyes Security (AI-Issue-Triage)*</sub>"
                 return comment
         
-        # Duplicate check
+        # Duplicate check (formatted like AI-Issue-Triage)
         if triage_result.get("duplicate_check"):
             dup = triage_result["duplicate_check"]
             if dup.get("is_duplicate"):
-                comment = "## 🔍 Duplicate Issue Detected\n\n"
-                comment += f"This issue appears to be a duplicate of **#{dup['duplicate_of']['issue_id']}**\n\n"
-                comment += f"**Similarity Score**: {dup.get('similarity_score', 0) * 100:.1f}%\n"
-                comment += f"**Confidence**: {dup.get('confidence_score', 0) * 100:.1f}%\n\n"
-                comment += "---\n*Powered by Ansieyes*"
+                comment = "# 🤖 Ansieyes Report\n\n"
+                comment += "## 🔍 Duplicate Issue Detected\n\n"
+                
+                dup_of = dup.get('duplicate_of', {})
+                dup_issue_id = dup_of.get('issue_id', 'unknown')
+                dup_title = dup_of.get('title', 'Unknown Title')
+                
+                comment += f"This issue appears to be a duplicate of **#{dup_issue_id}**: *{dup_title}*\n\n"
+                
+                similarity_percent = int(dup.get('similarity_score', 0) * 100)
+                confidence_percent = int(dup.get('confidence_score', 0) * 100)
+                
+                comment += f"📊 **Similarity Score:** `{similarity_percent}%`  \n"
+                comment += f"🎯 **Confidence:** `{confidence_percent}%`  \n"
+                comment += f"⏰ **Generated:** `{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}`\n\n"
+                comment += "---\n\n"
+                
+                # Show why it's considered duplicate
+                if dup.get('similarity_reasons'):
+                    comment += "### 🔗 Similarity Reasons\n\n"
+                    for i, reason in enumerate(dup['similarity_reasons'][:5], 1):
+                        comment += f"{i}. {reason}\n"
+                    comment += "\n"
+                
+                comment += "### 💡 Recommendation\n\n"
+                comment += f"Please review issue #{dup_issue_id} and consider closing this as a duplicate if they address the same problem.\n\n"
+                comment += "---\n"
+                comment += "<sub>🤖 *Powered by Ansieyes (AI-Issue-Triage)*</sub>"
                 return comment
         
         # Main report - Use AI-Issue-Triage's formatted output directly
