@@ -577,15 +577,40 @@ For PR reviews, please use `@_ab_prreview` instead.
         except:
             pass
         
-        # Add labels based on analysis
+        # Add/Update labels based on analysis
         if triage_result.get("surgeon"):
             surgeon = triage_result["surgeon"]
             labels_to_add = []
             
-            if not surgeon.get("error"):
-                issue_type = surgeon.get("issue_type", "").lower()
-                severity = surgeon.get("severity", "").lower()
+            if not surgeon.get("error") and "formatted_output" in surgeon:
+                # Extract type and severity from formatted text output
+                import re
+                formatted_text = surgeon["formatted_output"]
                 
+                # Extract: 🐛 **Type:** `BUG`
+                type_match = re.search(r'\*\*Type:\*\*\s+`([^`]+)`', formatted_text)
+                issue_type = type_match.group(1).lower() if type_match else ""
+                
+                # Extract: 🟡 **Severity:** `MEDIUM`
+                severity_match = re.search(r'\*\*Severity:\*\*\s+`([^`]+)`', formatted_text)
+                severity = severity_match.group(1).lower() if severity_match else ""
+                
+                # Remove old Type and Severity labels first
+                try:
+                    existing_labels = [label.name for label in issue.labels]
+                    labels_to_remove = []
+                    
+                    for label in existing_labels:
+                        if label.startswith("Type :") or label.startswith("Severity :"):
+                            labels_to_remove.append(label)
+                    
+                    for label in labels_to_remove:
+                        issue.remove_from_labels(label)
+                        logger.info(f"Removed old label: {label}")
+                except Exception as e:
+                    logger.warning(f"Could not remove old labels: {e}")
+                
+                # Add new labels
                 if issue_type:
                     type_label = f"Type : {issue_type.capitalize()}"
                     labels_to_add.append(type_label)
