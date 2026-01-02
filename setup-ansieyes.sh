@@ -389,13 +389,24 @@ setup_ai_issue_triage() {
         # Try regular pip install first
         if pip3 install -r requirements.txt 2>&1 | grep -q "externally-managed-environment"; then
             print_warning "Externally-managed Python environment detected"
-            print_info "Using --break-system-packages flag (safe for application installs)"
+            print_info "Installing with --break-system-packages and --ignore-installed flags"
             
-            if pip3 install --break-system-packages -r requirements.txt; then
+            # Use --ignore-installed to avoid conflicts with system packages
+            if pip3 install --break-system-packages --ignore-installed -r requirements.txt; then
                 print_success "AI-Issue-Triage dependencies installed"
             else
                 print_error "Failed to install AI-Issue-Triage dependencies"
-                print_info "Try manually: cd $ai_triage_path && pip3 install --break-system-packages -r requirements.txt"
+                print_info "Try manually: cd $ai_triage_path && pip3 install --break-system-packages --ignore-installed -r requirements.txt"
+                exit 1
+            fi
+        elif pip3 install --ignore-installed -r requirements.txt 2>&1 | grep -q "Cannot uninstall"; then
+            print_warning "Conflict with system packages detected"
+            print_info "Retrying with --ignore-installed flag"
+            
+            if pip3 install --break-system-packages --ignore-installed -r requirements.txt; then
+                print_success "AI-Issue-Triage dependencies installed"
+            else
+                print_error "Failed to install AI-Issue-Triage dependencies"
                 exit 1
             fi
         elif pip3 install -r requirements.txt; then
@@ -430,13 +441,23 @@ install_ansieyes_dependencies() {
         # Check for externally-managed environment
         if pip3 install -r requirements.txt 2>&1 | grep -q "externally-managed-environment"; then
             print_warning "Externally-managed Python environment detected"
-            print_info "Using --break-system-packages flag (safe for application installs)"
+            print_info "Installing with --break-system-packages and --ignore-installed flags"
             
-            if pip3 install --break-system-packages -r requirements.txt; then
+            if pip3 install --break-system-packages --ignore-installed -r requirements.txt; then
                 print_success "Dependencies installed successfully"
             else
                 print_error "Failed to install dependencies"
-                print_info "Try manually: pip3 install --break-system-packages -r requirements.txt"
+                print_info "Try manually: pip3 install --break-system-packages --ignore-installed -r requirements.txt"
+                exit 1
+            fi
+        elif pip3 install --ignore-installed -r requirements.txt 2>&1 | grep -q "Cannot uninstall"; then
+            print_warning "Conflict with system packages detected"
+            print_info "Retrying with --ignore-installed flag"
+            
+            if pip3 install --break-system-packages --ignore-installed -r requirements.txt; then
+                print_success "Dependencies installed successfully"
+            else
+                print_error "Failed to install dependencies"
                 exit 1
             fi
         elif pip3 install -r requirements.txt; then
@@ -448,11 +469,11 @@ install_ansieyes_dependencies() {
         fi
     elif command -v pip &> /dev/null; then
         print_info "Using pip..."
-        if pip install -r requirements.txt; then
+        if pip install --ignore-installed -r requirements.txt; then
             print_success "Dependencies installed successfully"
         else
             print_error "Failed to install dependencies"
-            print_info "Try manually: pip install -r requirements.txt"
+            print_info "Try manually: pip install --ignore-installed -r requirements.txt"
             exit 1
         fi
     else
