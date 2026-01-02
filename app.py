@@ -586,44 +586,76 @@ For PR reviews, please use `@_ab_prreview` instead.
         
         # Add/Update labels based on analysis results
         labels_to_add = []
+        is_blocked = False  # Track if analysis was blocked
         
-        # Remove old Type and Severity labels first (do this for all cases)
-        try:
-            existing_labels = [label.name for label in issue.labels]
-            labels_to_remove = []
-            
-            for label in existing_labels:
-                if label.startswith("Type :") or label.startswith("Severity :"):
-                    labels_to_remove.append(label)
-            
-            for label in labels_to_remove:
-                issue.remove_from_labels(label)
-                logger.info(f"Removed old label: {label}")
-        except Exception as e:
-            logger.warning(f"Could not remove old labels: {e}")
-        
-        # Case 1: Prompt injection (HIGH/CRITICAL) - blocked
+        # Check if this is a HIGH/CRITICAL prompt injection (blocked)
         if triage_result.get("prompt_injection_check"):
             injection = triage_result["prompt_injection_check"]
             risk_level = injection.get("risk_level", "").lower()
             
             if injection.get("is_injection") and risk_level in ['high', 'critical']:
+                is_blocked = True
+                # Remove old labels for blocked prompt injection
+                try:
+                    existing_labels = [label.name for label in issue.labels]
+                    labels_to_remove = []
+                    
+                    for label in existing_labels:
+                        if label.startswith("Type :") or label.startswith("Severity :") or label == "security-alert" or label == "prompt-injection-blocked":
+                            labels_to_remove.append(label)
+                    
+                    for label in labels_to_remove:
+                        issue.remove_from_labels(label)
+                        logger.info(f"Removed old label: {label}")
+                except Exception as e:
+                    logger.warning(f"Could not remove old labels: {e}")
+                
                 labels_to_add.append("security-alert")
-                labels_to_add.append("invalid")
+                labels_to_add.append("prompt-injection-blocked")
                 labels_to_add.append("ai-triaged")
-                logger.info("Adding security and invalid labels for prompt injection")
+                logger.info("Adding security labels for HIGH/CRITICAL prompt injection")
         
-        # Case 2: Duplicate issue detected
-        elif triage_result.get("duplicate_check", {}).get("is_duplicate"):
+        # Check for duplicate (only if not blocked)
+        if not is_blocked and triage_result.get("duplicate_check", {}).get("is_duplicate"):
+            # Remove old labels
+            try:
+                existing_labels = [label.name for label in issue.labels]
+                labels_to_remove = []
+                
+                for label in existing_labels:
+                    if label.startswith("Type :") or label.startswith("Severity :") or label == "duplicate":
+                        labels_to_remove.append(label)
+                
+                for label in labels_to_remove:
+                    issue.remove_from_labels(label)
+                    logger.info(f"Removed old label: {label}")
+            except Exception as e:
+                logger.warning(f"Could not remove old labels: {e}")
+            
             labels_to_add.append("duplicate")
             labels_to_add.append("ai-triaged")
             logger.info("Adding duplicate label")
         
-        # Case 3: Normal triage with Surgeon results
-        elif triage_result.get("surgeon"):
+        # Normal triage with Surgeon results (only if not blocked and not duplicate)
+        if not is_blocked and not triage_result.get("duplicate_check", {}).get("is_duplicate") and triage_result.get("surgeon"):
             surgeon = triage_result["surgeon"]
             
             if not surgeon.get("error") and "formatted_output" in surgeon:
+                # Remove old labels
+                try:
+                    existing_labels = [label.name for label in issue.labels]
+                    labels_to_remove = []
+                    
+                    for label in existing_labels:
+                        if label.startswith("Type :") or label.startswith("Severity :"):
+                            labels_to_remove.append(label)
+                    
+                    for label in labels_to_remove:
+                        issue.remove_from_labels(label)
+                        logger.info(f"Removed old label: {label}")
+                except Exception as e:
+                    logger.warning(f"Could not remove old labels: {e}")
+                
                 # Extract type and severity from formatted text output
                 import re
                 formatted_text = surgeon["formatted_output"]
