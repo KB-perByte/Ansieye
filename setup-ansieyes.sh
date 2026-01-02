@@ -738,11 +738,25 @@ detect_ec2() {
 }
 
 get_ec2_public_ip() {
-    curl -s http://169.254.169.254/latest/meta-data/public-ipv4
+    # Use IMDSv2 (requires session token)
+    local token=$(curl -X PUT -s -f --connect-timeout 2 "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+    if [ -n "$token" ]; then
+        curl -s -f --connect-timeout 2 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null
+    else
+        # Fallback to IMDSv1 if v2 fails
+        curl -s -f --connect-timeout 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null
+    fi
 }
 
 get_ec2_public_dns() {
-    curl -s http://169.254.169.254/latest/meta-data/public-hostname
+    # Use IMDSv2 (requires session token)
+    local token=$(curl -X PUT -s -f --connect-timeout 2 "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+    if [ -n "$token" ]; then
+        curl -s -f --connect-timeout 2 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-hostname 2>/dev/null
+    else
+        # Fallback to IMDSv1 if v2 fails
+        curl -s -f --connect-timeout 2 http://169.254.169.254/latest/meta-data/public-hostname 2>/dev/null
+    fi
 }
 
 setup_systemd_service() {
@@ -869,8 +883,21 @@ deploy_to_ec2() {
         public_ip=$(get_ec2_public_ip)
         public_dns=$(get_ec2_public_dns)
         
-        print_info "EC2 Public IP: $public_ip"
-        print_info "EC2 Public DNS: $public_dns"
+        # Validate that we got the metadata
+        if [ -z "$public_ip" ] || [[ "$public_ip" == *"401"* ]] || [[ "$public_ip" == *"Unauthorized"* ]]; then
+            print_warning "Could not fetch EC2 public IP from metadata service"
+            print_info "This may happen if IMDSv2 is required or metadata service is restricted"
+            read -p "Please enter your EC2 public IP manually: " public_ip
+        else
+            print_info "EC2 Public IP: $public_ip"
+        fi
+        
+        if [ -z "$public_dns" ] || [[ "$public_dns" == *"401"* ]] || [[ "$public_dns" == *"Unauthorized"* ]]; then
+            print_warning "Could not fetch EC2 public DNS from metadata service"
+            read -p "Please enter your EC2 public DNS manually (or press Enter to skip): " public_dns
+        else
+            print_info "EC2 Public DNS: $public_dns"
+        fi
         echo
         
         # Webhook URL options
