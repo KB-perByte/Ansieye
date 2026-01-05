@@ -187,16 +187,16 @@ def webhook():
                 return jsonify({"error": "No installation ID"}), 400
 
             # Check for EXACT mention triggers (no extra text allowed)
-            if comment_body == '@_ab_triage':
-                logger.info("Detected exact @_ab_triage mention")
+            if comment_body == '\\ansieyes_triage':
+                logger.info("Detected exact \\ansieyes_triage mention")
                 try:
                     handle_triage_mention(payload, installation_id)
                 except Exception as e:
                     logger.error(f"Error processing triage mention: {e}")
                     return jsonify({"error": str(e)}), 500
                     
-            elif comment_body == '@_ab_prreview':
-                logger.info("Detected exact @_ab_prreview mention")
+            elif comment_body == '\\ansieyes_prreview':
+                logger.info("Detected exact \\ansieyes_prreview mention")
                 try:
                     handle_pr_review_mention(payload, installation_id)
                 except Exception as e:
@@ -444,7 +444,7 @@ def format_workflow_comment(analysis, workflow_name, conclusion, failed_jobs, wo
 
 
 def handle_triage_mention(payload, installation_id):
-    """Handle @_ab_triage mention in issue or PR comments"""
+    """Handle \\ansieyes_triage mention in issue or PR comments"""
     issue_data = payload.get('issue', {})
     repo_full_name = payload.get('repository', {}).get('full_name')
     issue_number = issue_data.get('number')
@@ -465,18 +465,18 @@ def handle_triage_mention(payload, installation_id):
         repo = github_client.get_repo(repo_full_name)
         issue = repo.get_issue(issue_number)
         
-        # Validation: @_ab_triage should only work on issues, not PRs
+        # Validation: \ansieyes_triage should only work on issues, not PRs
         if is_pull_request:
             error_comment = """## ⚠️ Invalid Command
 
-`@_ab_triage` can only be used on **issues**, not pull requests.
+`\\ansieyes_triage` can only be used on **issues**, not pull requests.
 
-For PR reviews, please use `@_ab_prreview` instead.
+For PR reviews, please use `\\ansieyes_prreview` instead.
 
 ---
 *This is an automated response from Ansieyes.*"""
             issue.create_comment(error_comment)
-            logger.warning(f"@_ab_triage used on PR #{issue_number}, posted error message")
+            logger.warning(f"\\ansieyes_triage used on PR #{issue_number}, posted error message")
             return
         
         # Post processing message
@@ -675,7 +675,7 @@ For PR reviews, please use `@_ab_prreview` instead.
 
 
 def handle_pr_review_mention(payload, installation_id):
-    """Handle @_ab_prreview mention in issue or PR comments"""
+    """Handle \\ansieyes_prreview mention in issue or PR comments"""
     issue_data = payload.get('issue', {})
     repo_full_name = payload.get('repository', {}).get('full_name')
     issue_number = issue_data.get('number')
@@ -696,18 +696,18 @@ def handle_pr_review_mention(payload, installation_id):
         repo = github_client.get_repo(repo_full_name)
         issue = repo.get_issue(issue_number)
         
-        # Validation: @_ab_prreview should only work on PRs, not issues
+        # Validation: \ansieyes_prreview should only work on PRs, not issues
         if not is_pull_request:
             error_comment = """## ⚠️ Invalid Command
 
-`@_ab_prreview` can only be used on **pull requests**, not regular issues.
+`\\ansieyes_prreview` can only be used on **pull requests**, not regular issues.
 
-For issue triage, please use `@_ab_triage` instead.
+For issue triage, please use `\\ansieyes_triage` instead.
 
 ---
 *This is an automated response from Ansieyes.*"""
             issue.create_comment(error_comment)
-            logger.warning(f"@_ab_prreview used on issue #{issue_number}, posted error message")
+            logger.warning(f"\\ansieyes_prreview used on issue #{issue_number}, posted error message")
             return
         
         # Get the PR object

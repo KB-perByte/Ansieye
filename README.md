@@ -13,8 +13,8 @@ AI bot for PR reviews and issue triage using Google's Gemini AI.
 ## Usage
 
 Comment on GitHub:
-- **`@_ab_prreview`** - Review a PR
-- **`@_ab_triage`** - Analyze an issue
+- **`\\ansieyes_prreview`** - Review a PR
+- **`\\ansieyes_triage`** - Analyze an issue
 
 **Important**: Exact match only, no extra text!
 
