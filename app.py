@@ -700,17 +700,19 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
         
         # Case 2: Duplicate issue (only if not blocked)
         logger.info(f"Checking duplicates. triage_result type: {type(triage_result)}, is None: {triage_result is None}")
-        if not is_blocked and triage_result and triage_result.get("duplicate_check", {}).get("is_duplicate"):
+        duplicate_check = triage_result.get("duplicate_check") if triage_result else None
+        if not is_blocked and duplicate_check and duplicate_check.get("is_duplicate"):
             labels_to_add.append("duplicate")
             labels_to_add.append("ai-triaged")
             logger.info("Adding duplicate labels")
         
         # Case 3: Normal triage with Surgeon results (only if not blocked and not duplicate)
         logger.info(f"Checking normal triage. triage_result type: {type(triage_result)}, is None: {triage_result is None}")
-        if not is_blocked and triage_result and not triage_result.get("duplicate_check", {}).get("is_duplicate"):
+        is_duplicate = duplicate_check and duplicate_check.get("is_duplicate") if duplicate_check else False
+        if not is_blocked and triage_result and not is_duplicate:
             logger.info("Checking surgeon results for labels...")
-            if triage_result and triage_result.get("surgeon"):
-                surgeon = triage_result["surgeon"]
+            surgeon = triage_result.get("surgeon") if triage_result else None
+            if surgeon:
                 logger.info(f"Surgeon keys: {surgeon.keys()}")
                 
                 if not surgeon.get("error") and "formatted_output" in surgeon:
