@@ -688,7 +688,8 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
         
         # Case 1: HIGH/CRITICAL prompt injection (blocked)
         is_blocked = False
-        if triage_result.get("prompt_injection_check"):
+        logger.info(f"Checking prompt injection. triage_result type: {type(triage_result)}, is None: {triage_result is None}")
+        if triage_result and triage_result.get("prompt_injection_check"):
             injection = triage_result["prompt_injection_check"]
             risk_level = injection.get("risk_level", "").lower()
             
@@ -698,15 +699,17 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
                 logger.info("Adding prompt injection blocked label")
         
         # Case 2: Duplicate issue (only if not blocked)
-        if not is_blocked and triage_result.get("duplicate_check", {}).get("is_duplicate"):
+        logger.info(f"Checking duplicates. triage_result type: {type(triage_result)}, is None: {triage_result is None}")
+        if not is_blocked and triage_result and triage_result.get("duplicate_check", {}).get("is_duplicate"):
             labels_to_add.append("duplicate")
             labels_to_add.append("ai-triaged")
             logger.info("Adding duplicate labels")
         
         # Case 3: Normal triage with Surgeon results (only if not blocked and not duplicate)
-        if not is_blocked and not triage_result.get("duplicate_check", {}).get("is_duplicate"):
+        logger.info(f"Checking normal triage. triage_result type: {type(triage_result)}, is None: {triage_result is None}")
+        if not is_blocked and triage_result and not triage_result.get("duplicate_check", {}).get("is_duplicate"):
             logger.info("Checking surgeon results for labels...")
-            if triage_result.get("surgeon"):
+            if triage_result and triage_result.get("surgeon"):
                 surgeon = triage_result["surgeon"]
                 logger.info(f"Surgeon keys: {surgeon.keys()}")
                 
