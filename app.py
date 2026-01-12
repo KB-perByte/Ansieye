@@ -627,17 +627,40 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
                 pass
             return
         
+        logger.info(f"Triage result keys: {triage_result.keys()}")
+        
         # Format and post results
-        comment_body = issue_triager.format_triage_comment(triage_result)
-        issue.create_comment(comment_body)
+        try:
+            comment_body = issue_triager.format_triage_comment(triage_result)
+            logger.info("Formatted triage comment successfully")
+        except Exception as e:
+            logger.error(f"Failed to format triage comment: {e}")
+            import traceback
+            traceback.print_exc()
+            # Delete processing comment
+            try:
+                processing_comment.delete()
+            except:
+                pass
+            return
+        
+        try:
+            issue.create_comment(comment_body)
+            logger.info("Posted triage comment successfully")
+        except Exception as e:
+            logger.error(f"Failed to post triage comment: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Delete processing comment
         try:
             processing_comment.delete()
-        except:
-            pass
+            logger.info("Deleted processing comment")
+        except Exception as e:
+            logger.warning(f"Could not delete processing comment: {e}")
         
         # Simple label management: Remove ALL existing labels, then add new ones
+        logger.info("Starting label management...")
         labels_to_add = []
         
         # Remove ALL existing labels
@@ -647,8 +670,12 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
                 for label in existing_labels:
                     issue.remove_from_labels(label)
                 logger.info(f"Removed all old labels: {existing_labels}")
+            else:
+                logger.info("No existing labels to remove")
         except Exception as e:
             logger.warning(f"Could not remove old labels: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Determine which labels to add based on triage result
         # Check in order: blocked prompt injection > duplicate > normal triage
@@ -672,21 +699,26 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
         
         # Case 3: Normal triage with Surgeon results (only if not blocked and not duplicate)
         if not is_blocked and not triage_result.get("duplicate_check", {}).get("is_duplicate"):
+            logger.info("Checking surgeon results for labels...")
             if triage_result.get("surgeon"):
                 surgeon = triage_result["surgeon"]
+                logger.info(f"Surgeon keys: {surgeon.keys()}")
                 
                 if not surgeon.get("error") and "formatted_output" in surgeon:
                     # Extract type and severity from formatted text output
                     import re
                     formatted_text = surgeon["formatted_output"]
+                    logger.info("Extracting type and severity from formatted output...")
                     
                     # Extract: 🐛 **Type:** `BUG`
                     type_match = re.search(r'\*\*Type:\*\*\s+`([^`]+)`', formatted_text)
                     issue_type = type_match.group(1).lower() if type_match else ""
+                    logger.info(f"Extracted type: {issue_type}")
                     
                     # Extract: 🟡 **Severity:** `MEDIUM`
                     severity_match = re.search(r'\*\*Severity:\*\*\s+`([^`]+)`', formatted_text)
                     severity = severity_match.group(1).lower() if severity_match else ""
+                    logger.info(f"Extracted severity: {severity}")
                     
                     # Add Type and Severity labels
                     if issue_type:
@@ -695,37 +727,56 @@ For PR reviews, please use `\\ansieyes_prreview` instead.
                         formatted_type = issue_type.replace('_', ' ').title()
                         type_label = f"Type : {formatted_type}"
                         labels_to_add.append(type_label)
+                        logger.info(f"Added type label: {type_label}")
                     
                     if severity:
                         severity_label = f"Severity : {severity.capitalize()}"
                         labels_to_add.append(severity_label)
+                        logger.info(f"Added severity label: {severity_label}")
                     
                     labels_to_add.append("ai-triaged")
+                    logger.info("Added ai-triaged label")
+                else:
+                    logger.warning(f"Surgeon has error or no formatted_output. Error: {surgeon.get('error')}")
+            else:
+                logger.warning("No surgeon results in triage_result")
         
         # Apply all new labels (create them if they don't exist)
+        logger.info(f"Labels to add: {labels_to_add}")
         if labels_to_add:
             try:
                 repo = issue.repository
                 # Get existing labels in the repo
                 existing_repo_labels = {label.name for label in repo.get_labels()}
+                logger.info(f"Existing repo labels: {existing_repo_labels}")
                 
                 # Create any labels that don't exist
                 for label_name in labels_to_add:
                     if label_name not in existing_repo_labels:
                         # Determine color based on label type
                         color = get_label_color(label_name)
+                        logger.info(f"Creating new label: {label_name} with color #{color}")
                         try:
                             repo.create_label(name=label_name, color=color)
                             logger.info(f"Created new label: {label_name} with color #{color}")
                             existing_repo_labels.add(label_name)
                         except Exception as e:
                             logger.warning(f"Could not create label '{label_name}': {e}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        logger.info(f"Label '{label_name}' already exists")
                 
                 # Now add all labels to the issue
+                logger.info(f"Applying labels {labels_to_add} to issue #{issue_number}")
                 issue.add_to_labels(*labels_to_add)
-                logger.info(f"Added new labels: {labels_to_add}")
+                logger.info(f"Successfully added labels: {labels_to_add}")
             except Exception as e:
-                logger.warning(f"Could not add labels: {e}")
+                logger.error(f"Could not add labels: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            logger.warning("No labels to add")
         
         logger.info(f"Triage completed for issue #{issue_number}")
         
